@@ -1,0 +1,155 @@
+#Importing libaries and dataset
+import re
+import pandas as pd
+import spacy
+import pandas as pd
+import re
+import nltk
+from nltk.corpus import stopwords
+import os
+
+from google.colab import drive
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = "/content/gdrive/MyDrive/Speciale/full_copy.pkl"
+dan_df= pd.read_pickle(dataset_path)
+print(dan_df)
+
+#Danish prepros on answers - source: https://github.com/explosion/spacy-models/releases/tag/da_core_news_sm-3.7.0 and https://www.geeksforgeeks.org/text-preprocessing-in-python-set-1/
+nltk.download('stopwords')
+nlp = spacy.load('da_core_news_sm')
+
+danish_stopwords = set(stopwords.words('danish'))
+def clean(text):
+    removed_elements = re.findall('[^A-Za-zæøåÆØÅ]+', text)
+    cleaned_text = re.sub('[^A-Za-zæøåÆØÅ]+', ' ', text).lower()
+    return cleaned_text, removed_elements
+
+def process_text(text):
+    cleaned_text, removed_elements = clean(text)
+    doc = nlp(cleaned_text)
+    lemmas = [token.lemma_ for token in doc if token.text not in danish_stopwords]  
+    tokens = [token.text for token in doc if token.text not in danish_stopwords]    
+    pos_tags = [token.pos_ for token in doc if token.text not in danish_stopwords]  
+    final_text = ' '.join(lemmas)
+    return tokens, pos_tags, lemmas, final_text, removed_elements
+
+dan_df['Processed'] = dan_df['answer'].apply(process_text)
+dan_df['tokens'], dan_df['POS tags'], dan_df['lemmas'], dan_df['cleaned_ans'], dan_df['rem_elem'] = zip(*dan_df['processed'])
+print(dan_df)
+
+output_path = "/content/gdrive/My Drive/Speciale/answer_pre.pkl"
+output_directory = os.path.dirname(output_path)
+if not os.path.exists(output_directory):
+    os.makedirs(output_directory)
+dan_df.to_pickle(output_path)
+
+
+#Danish repros on questions
+def clean(text):
+    removed_elements = re.findall('[^A-Za-zæøåÆØÅ]+', text)
+    cleaned_text = re.sub('[^A-Za-zæøåÆØÅ]+', ' ', text).lower()
+    return cleaned_text, removed_elements
+
+def process_text(text):
+    cleaned_text, removed_elements = clean(text)
+    doc = nlp(cleaned_text)
+    lemmas = [token.lemma_ for token in doc if token.text not in danish_stopwords] 
+    tokens = [token.text for token in doc if token.text not in danish_stopwords]   
+    pos_tags = [token.pos_ for token in doc if token.text not in danish_stopwords]
+    final_text = ' '.join(lemmas)  # Combine lemmas into a single string
+    return tokens, pos_tags, lemmas, final_text, removed_elements
+
+dan_df['processed'] = dan_df['question'].apply(process_text)
+dan_df['tokens'], dan_df['POS tags'], dan_df['lemmas'], dan_df['cleaned_ans'], dan_df['rem_elem'] = zip(*dan_df['Processed'])
+print(dan_df)
+
+output_path = "/content/gdrive/My Drive/Speciale/full_copy_m_dan_pre_usplit.pkl"
+
+output_directory = os.path.dirname(output_path)
+if not os.path.exists(output_directory):
+    os.makedirs(output_directory)
+dan_df.to_pickle(output_path)
+
+#Preprocessing - eng: https://www.geeksforgeeks.org/text-preprocessing-in-python-set-1/ and https://medium.com/@chyun55555/unsupervised-sentiment-analyis-with-sentiwordnet-and-vader-in-python-a519660198be
+import nltk
+from nltk.tokenize import word_tokenize
+from nltk import pos_tag
+from nltk.corpus import stopwords
+from nltk.corpus import wordnet
+import string
+import re
+import pandas as pd
+from nltk.stem import WordNetLemmatizer
+from google.colab import drive
+nltk.download('averaged_perceptron_tagger')
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('wordnet')
+
+
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = "/content/gdrive/My Drive/Speciale/full_copy_msplit.pkl"
+eng_df = pd.read_pickle(dataset_path)
+eng_df.head()
+
+
+p = inflect.engine()
+def text_lowercase(text):
+    return text.lower()
+
+def convert_number(text):
+    def replace_with_words(match):
+        return p.number_to_words(match.group())
+    return re.sub(r'\b\d+\b', replace_with_words, text)
+
+def remove_punctuation(text):
+    translator = str.maketrans('', '', string.punctuation)
+    return text.translate(translator)
+
+def remove_whitespace(text):
+    return " ".join(text.split())
+
+def remove_stopwords(text):
+    stop_words = set(stopwords.words("english"))
+    word_tokens = word_tokenize(text)
+    filtered_text = [word for word in word_tokens if word not in stop_words]
+    return " ".join(filtered_text)
+
+def preprocess_text(text):
+    text = text_lowercase(text)
+    text = convert_number(text)
+    text = remove_punctuation(text)
+    text = remove_whitespace(text)
+    #text = remove_stopwords(text)  # Adding the remove_stopwords function here
+    return text
+eng_df['processed_eng'] = eng_df['eng'].apply(preprocess_text)
+
+
+pos_dict = {'J': wordnet.ADJ, 'V': wordnet.VERB, 'N': wordnet.NOUN, 'R': wordnet.ADV}
+def token_stop_pos(text):
+    tags = pos_tag(word_tokenize(text))
+    newlist = []
+    for word, tag in tags:
+        if word.lower() not in set(stopwords.words('english')):
+            newlist.append(tuple([word, pos_dict.get(tag[0])]))
+    return newlist
+eng_df['POS tagged'] = eng_df['clean_eng_text'].apply(token_stop_pos)
+eng_df.head()
+
+wordnet_lemmatizer = WordNetLemmatizer()
+def lemmatize(pos_data):
+    lemma_rew = " "
+    for word, pos in pos_data:
+        if not pos:
+            lemma = word
+            lemma_rew = lemma_rew + " " + lemma
+        else:
+            lemma = wordnet_lemmatizer.lemmatize(word, pos=pos)
+            lemma_rew = lemma_rew + " " + lemma
+    return lemma_rew
+eng_df['lemma'] = eng_df['POS tagged'].apply(lemmatize)
+eng_df.head()
+
+
+
+
