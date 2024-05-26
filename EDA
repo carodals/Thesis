@@ -1,0 +1,7 @@
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = "/content/gdrive/My Drive/Speciale/full_copy_m_dan_pre.pkl"
+dan_df= pd.read_pickle(dataset_path)
+print(dan_df)
+
+
+dan_df[['Question', 'Final Cleaned Text']]
