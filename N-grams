@@ -1,0 +1,134 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from collections import Counter
+
+#See "Data preprecosseing" to see the development of tokenz
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = '/content/gdrive/MyDrive/Speciale/answer_pre.pkl' #"full_copy" er den endelige fil, efer alt data merge er lavet
+df = pd.read_pickle(dataset_path)
+
+
+#Displaying N-grams for Mindhelper answers - source: https://github.com/gohjiayi/suicidal-text-detection/blob/main/eda.ipynb
+
+def generate_ngrams(tokens, n):
+    ngrams = zip(*[tokens[i:] for i in range(n)])
+    return [" ".join(ngram) for ngram in ngrams]
+tokenized_sent = df['tokens']
+
+unigram = []
+bigram = []
+trigram = []
+quadgram = []
+for tokens in tokenized_sent:
+    unigram.extend(generate_ngrams(tokens, 1))
+    bigram.extend(generate_ngrams(tokens, 2))
+    trigram.extend(generate_ngrams(tokens, 3))
+    quadgram.extend(generate_ngrams(tokens, 4))
+
+unigram_freq = Counter(unigram)
+bigram_freq = Counter(bigram)
+trigram_freq = Counter(trigram)
+quadgram_freq = Counter(quadgram)
+unigram_df = pd.DataFrame(unigram_freq.most_common(10), columns=['Unigram', 'Frequency'])
+bigram_df = pd.DataFrame(bigram_freq.most_common(10), columns=['Bigram', 'Frequency'])
+trigram_df = pd.DataFrame(trigram_freq.most_common(10), columns=['Trigram', 'Frequency'])
+quadgram_df = pd.DataFrame(quadgram_freq.most_common(10), columns=['Quadgram', 'Frequency'])
+
+
+def render_mpl_table(data, col_width=3.0, row_height=0.625, font_size=14,
+                     header_color='#40466e', row_colors=['#f1f1f2', 'w'], edge_color='w',
+                     bbox=[0, 0, 1, 1], header_columns=0,
+                     ax=None, **kwargs):
+    if ax is None:
+        size = (np.array(data.shape[::-1]) + np.array([0, 1])) * np.array([col_width, row_height])
+        fig, ax = plt.subplots(figsize=size)
+        ax.axis('off')
+
+    mpl_table = ax.table(cellText=data.values, bbox=bbox, colLabels=data.columns, **kwargs)
+    mpl_table.auto_set_font_size(False)
+    mpl_table.set_fontsize(font_size)
+    for k, cell in  six.iteritems(mpl_table._cells):
+        cell.set_edgecolor(edge_color)
+        if k[0] == 0 or k[1] < header_columns:
+            cell.set_text_props(weight='bold', color='w')
+            cell.set_facecolor(header_color)
+        else:
+            cell.set_facecolor(row_colors[k[0] % len(row_colors)])
+    return fig
+
+fig1 = render_mpl_table(unigram_df, header_columns=0, col_width=3)
+fig2 = render_mpl_table(bigram_df, header_columns=0, col_width=3)
+fig3 = render_mpl_table(trigram_df, header_columns=0, col_width=3)
+fig4 = render_mpl_table(quadgram_df, header_columns=0, col_width=3)
+plt.show()
+
+
+
+
+
+
+
+#See "Data preprecosseing" to see the development of tokenz
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = "/content/gdrive/My Drive/Speciale/full_copy_m_dan_pre.pkl"
+dan_df= pd.read_pickle(dataset_path)
+print(dan_df)
+
+#Displaying N-grams for Mindhelper answers - source: https://github.com/gohjiayi/suicidal-text-detection/blob/main/eda.ipynb
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = "/content/gdrive/My Drive/Speciale/full_copy_m_dan_pre.pkl"
+dan_df= pd.read_pickle(dataset_path)
+print(dan_df)
+def generate_ngrams(tokens, n):
+    ngrams = zip(*[tokens[i:] for i in range(n)])
+    return [" ".join(ngram) for ngram in ngrams]
+tokenized_sent = dan_df['tokens']
+
+unigram = []
+bigram = []
+trigram = []
+quadgram = []
+for tokens in tokenized_sent:
+    unigram.extend(generate_ngrams(tokens, 1))
+    bigram.extend(generate_ngrams(tokens, 2))
+    trigram.extend(generate_ngrams(tokens, 3))
+    quadgram.extend(generate_ngrams(tokens, 4))
+
+unigram_freq = Counter(unigram)
+bigram_freq = Counter(bigram)
+trigram_freq = Counter(trigram)
+quadgram_freq = Counter(quadgram)
+unigram_df = pd.DataFrame(unigram_freq.most_common(10), columns=['Unigram', 'Frequency'])
+bigram_df = pd.DataFrame(bigram_freq.most_common(10), columns=['Bigram', 'Frequency'])
+trigram_df = pd.DataFrame(trigram_freq.most_common(10), columns=['Trigram', 'Frequency'])
+quadgram_df = pd.DataFrame(quadgram_freq.most_common(10), columns=['Quadgram', 'Frequency'])
+
+
+def render_mpl_table(data, col_width=3.0, row_height=0.625, font_size=14,
+                     header_color='#40466e', row_colors=['#f1f1f2', 'w'], edge_color='w',
+                     bbox=[0, 0, 1, 1], header_columns=0,
+                     ax=None, **kwargs):
+    if ax is None:
+        size = (np.array(data.shape[::-1]) + np.array([0, 1])) * np.array([col_width, row_height])
+        fig, ax = plt.subplots(figsize=size)
+        ax.axis('off')
+
+    mpl_table = ax.table(cellText=data.values, bbox=bbox, colLabels=data.columns, **kwargs)
+    mpl_table.auto_set_font_size(False)
+    mpl_table.set_fontsize(font_size)
+    for k, cell in  six.iteritems(mpl_table._cells):
+        cell.set_edgecolor(edge_color)
+        if k[0] == 0 or k[1] < header_columns:
+            cell.set_text_props(weight='bold', color='w')
+            cell.set_facecolor(header_color)
+        else:
+            cell.set_facecolor(row_colors[k[0] % len(row_colors)])
+    return fig
+
+fig1 = render_mpl_table(unigram_df, header_columns=0, col_width=3)
+fig2 = render_mpl_table(bigram_df, header_columns=0, col_width=3)
+fig3 = render_mpl_table(trigram_df, header_columns=0, col_width=3)
+fig4 = render_mpl_table(quadgram_df, header_columns=0, col_width=3)
+plt.show()
+
