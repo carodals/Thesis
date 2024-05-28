@@ -1,1 +1,436 @@
+#Pretrained model w. pytorch
+import pandas as pd
+from datasets import Dataset
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Trainer, TrainingArguments, EarlyStoppingCallback
+import wandb
+import numpy as np
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, precision_recall_fscore_support
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from transformers import AutoTokenizer
+from datasets import Dataset
+import pandas as pd
+from google.colab import drive
+from sklearn.model_selection import train_test_split
+from transformers import AutoModelForSequenceClassification
+from transformers import TrainingArguments
+import numpy as np
+import evaluate
+from transformers import TrainingArguments, Trainer
 
+
+
+#Splitting categories:
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = /content/gdrive/My Drive/Speciale/full_copy.pkl
+df = pd.read_pickle(dataset_path)
+
+#Checking the categories
+category_counts = df['category'].value_counts()
+total_categories = df['category'].nunique()
+print("Antal forekomster af hver kategori:")
+print(category_counts)
+print("\nTotal antal kategorier i alt:", total_categories)
+
+contains_mad = "Mad" in simple_df['category'].values
+contains_sovn_og_motion = "søvn og motion" in simple_df['category'].values
+contains_both= "Mad, søvn og motion" in simple_df['category'].values
+print(f'"Mad" findes i kategorierne:', contains_mad)
+print(f'"søvn og motion" findes i kategorierne:', contains_sovn_og_motion)
+print(f'"Mad, søvn og motion" findes i kategorierne:', contains_sovn_og_motion)
+
+#split
+label_mapping = {}  
+label_counter = 0  
+data = []           
+ID = 0             
+for index, row in df.iterrows():
+    category_text = row['category'].strip().lower()
+    if "mad, søvn og motion" not in category_text:
+        categories = [category.strip() for category in row['category'].split(',')]
+    else:
+        categories = ["Mad, søvn og motion"
+    question = row['question']
+    for category in categories:
+        if category not in label_mapping:
+            label_mapping[category] = label_counter
+            label_counter += 1
+
+        label = label_mapping[category]
+        data.append({
+            'ID': ID,
+            'Category': category,
+            'Question': question,
+            'Gender': row['sex'],
+            'Age': row['age'],
+            'Label': label,
+            'eng': row['eng'],  # Assuming there is an 'eng' column in your DataFrame
+            'classification': row['classification'],  # Assuming there is a 'classification' column
+            'm_class': row['m_class'],  # Assuming there is an 'm_class' column
+            'kval_class': row['kval_class'],  # Assuming there is a 'kval_class' column
+        })
+        ID += 1  
+new_df = pd.DataFrame(data)
+contains_mad = "Mad" in new_df['category'].values
+contains_sovn_og_motion = "søvn og motion" in new_df['category'].values
+print(f'"Mad" findes i kategorierne:', contains_mad)
+print(f'"søvn og motion" findes i kategorierne:', contains_sovn_og_motion)
+
+category_counts = new_df['category'].value_counts()
+total_categories = new_df['category'].nunique()
+print("Antal forekomster af hver kategori:")
+print(category_counts)
+print("\nTotal antal kategorier i alt:", total_categories)
+
+
+#Save split categories in pickle file
+output_path = "/content/gdrive/My Drive/Speciale/full_copy_msplit.pkl"
+output_directory = os.path.dirname(output_path)
+if not os.path.exists(output_directory):
+    os.makedirs(output_directory)
+new_df.to_pickle(output_path)
+print("Dataframe 'full_copy' blev gemt som en pickle fil på:", output_path)
+
+
+#Models
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = '/content/gdrive/MyDrive/Speciale/full_copy_msplit.pkl' #skal rettes alt efter hvor og hvordan koden køres
+dataset = pd.read_pickle(dataset_path)
+
+#Ensuring the categories w. highest amount has the lowest label(therfore displayed first)
+cat_map = {
+    "Svære følelser og tanker": 0,
+    "Kærlighed og sex": 1,
+    "Skole og uddannelse": 2,
+    "Angst og stress": 3,
+    "Trist eller deprimeret": 4,
+    "Venner": 5,
+    "Forelskelse": 6,
+    "Identitet": 7,
+    "Spiseforstyrrelser og selvskade": 8,
+    "Familie": 9,
+    "Ensomhed": 10,
+    "Forældre": 11,
+    "Mad, søvn og motion": 12,
+    "Generelt": 13,
+    "Usikkerhed": 14,
+    "Tankemylder": 15,
+    "Selvværd": 16,
+    "Udenfor": 17,
+    "Få hjælp": 18,
+    "Afhængighed og misbrug": 19,
+    "Mobning og overgreb": 20,
+    "Nervøsitet": 21,
+    "Seksuelle overgreb": 22,
+    "Vold": 23,
+    "Mobning": 24,
+    "Social angst": 25,
+    "Skilsmisse": 26,
+    "Dating": 27,
+    "Eksamensangst": 28,
+    "Eksamensstress": 29,
+    "Fobi": 30,
+    "Mental fitness": 31,
+    "Selvomsorg": 32
+}
+dataset['label'] = dataset['category'].map(cat_map)
+
+#Now training begins with the Danish language model according to the guide on hugging face - source: https://huggingface.co/docs/transformers/training? and https://huggingface.co/KennethEnevoldsen/dfm-sentence-encoder-large
+#First step is to tokenize data.
+#To use the "map" function, convert the pandas DataFrame to a Dataset object from the datasets library, and then use the map function.
+
+#Label ændres til "labels" for at passe til modellen
+df = dataset
+df['labels'] = df['label']
+dataset = Dataset.from_pandas(df)
+
+#Tokenizig using the pre-trained model's tokenizer
+tokenizer = AutoTokenizer.from_pretrained("KennethEnevoldsen/dfm-sentence-encoder-large")
+def tokenize_function(examples):
+    return tokenizer(examples["Question"], padding="max_length", truncation=True)
+tokenized_datasets = dataset.map(tokenize_function, batched=True)
+print(tokenized_datasets)
+
+train_indices, validation_indices = train_test_split(range(len(tokenized_datasets)), test_size=0.05, random_state=42)
+train_dataset = tokenized_datasets.select(train_indices)
+validation_dataset = tokenized_datasets.select(validation_indices)
+print("Training dataset size:", len(train_dataset))
+print("Validation dataset size:", len(validation_dataset))
+print(train_dataset[0]) 
+
+#Load the pretrained model and set labes to 33 as that is the number of categories that can be predicted
+model = AutoModelForSequenceClassification.from_pretrained("KennethEnevoldsen/dfm-sentence-encoder-large", num_labels=33)
+
+#Base model:
+
+#Evaluate
+metric = evaluate.load("accuracy")
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    acc = accuracy_score(labels, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted', zero_division=0)
+    conf_matrix = confusion_matrix(labels, predictions, labels=np.arange(33))
+    class_report = classification_report(labels, predictions, labels=np.arange(33), zero_division=0)
+
+    print(f"\nAccuracy: {acc:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1-Score: {f1:.4f}")
+    print(f"\nClassification Report:\n{class_report}")
+
+    global last_conf_matrix, last_class_report
+    last_conf_matrix = conf_matrix
+    last_class_report = class_report
+
+    return {
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1
+    }
+
+# training arguments
+training_args = TrainingArguments(
+    output_dir="./test_trainer",
+    evaluation_strategy="epoch",
+    save_strategy="epoch",  
+    per_device_train_batch_size=8,
+    num_train_epochs=10,
+    load_best_model_at_end=True,  
+    metric_for_best_model="f1",   
+    logging_dir='./logs',         
+    logging_strategy="epoch",    
+)
+
+#trainer
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train_dataset,
+    eval_dataset=validation_dataset,
+    compute_metrics=compute_metrics,
+)
+trainer.train()
+
+conf_matrix = last_conf_matrix
+class_report = last_class_report
+print(f"\nFinal Epoch {trainer.state.epoch} Classification Report:")
+print(class_report)
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+plt.title(f'Confusion Matrix at Final Epoch {trainer.state.epoch}')
+plt.xlabel('Predicted Labels')
+plt.ylabel('True Labels')
+plt.show()
+
+
+*****Grid search ******
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    acc = accuracy_score(labels, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted', zero_division=0)
+    conf_matrix = confusion_matrix(labels, predictions, labels=np.arange(33))
+    class_report = classification_report(labels, predictions, labels=np.arange(33), zero_division=0)
+#print statement for each epoch
+    print(f"\nAccuracy: {acc:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1-Score: {f1:.4f}")
+    print(f"\nClassification Report:\n{class_report}")
+
+    global last_conf_matrix, last_class_report
+    last_conf_matrix = conf_matrix
+    last_class_report = class_report
+    return {
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1
+    }
+
+#settings for hyperparameters
+regularization_values = [0.01, 0.05, 0.1]
+dropout_values = [0.1, 0.2, 0.3]
+for regularization in regularization_values:
+    for dropout in dropout_values:
+        run_name = f"reg_{regularization}_dropout_{dropout}"
+        wandb.init(project="reg_again", name=run_name, config={
+            "regularization": regularization,
+            "dropout": dropout
+        })
+
+        model = AutoModelForSequenceClassification.from_pretrained(
+            "KennethEnevoldsen/dfm-sentence-encoder-large",
+            num_labels=33,
+            classifier_dropout=dropout  
+        )
+
+
+        training_args = TrainingArguments(
+            output_dir=f"./models/model_{run_name}",
+            evaluation_strategy="epoch",
+            save_strategy="epoch", 
+            learning_rate=5e-5,
+            per_device_train_batch_size=8,
+            num_train_epochs=10,
+            weight_decay=regularization,
+            load_best_model_at_end=True,  
+            metric_for_best_model="f1",   
+            report_to="wandb",
+            logging_dir='./logs',         
+            logging_strategy="epoch",     
+        )
+        early_stopping_callback = EarlyStoppingCallback(early_stopping_patience=3)
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=validation_dataset,
+            compute_metrics=compute_metrics,
+            callbacks=[early_stopping_callback]
+        )
+        trainer.train()
+        wandb.finish()
+
+#Plots
+        conf_matrix = last_conf_matrix
+        class_report = last_class_report
+        print(f"\nFinal Epoch {trainer.state.epoch} Classification Report:")
+        print(class_report)
+        sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+        plt.title(f'Confusion Matrix at Final Epoch {trainer.state.epoch}')
+        plt.xlabel('Predicted Labels')
+        plt.ylabel('True Labels')
+        plt.show()
+
+***** Top-k-accuracy****** Source: https://scikit-learn.org/stable/modules/generated/sklearn.metrics.top_k_accuracy_score.html and https://www.evidentlyai.com/ranking-metrics/precision-recall-at-k
+
+def evaluate_top_k_metrics(logits, labels, k=3):
+    top_k_preds = np.argsort(logits, axis=-1)[:, -k:]
+    num_samples = len(labels)
+    top_k_accuracy = np.mean([labels[i] in top_k_preds[i] for i in range(num_samples)])
+
+    precision_at_k = np.mean([np.sum(labels[i] == top_k_preds[i]) / k for i in range(num_samples)])
+    recall_at_k = np.mean([labels[i] in top_k_preds[i] for i in range(num_samples)])
+    f1_at_k = 2 * (precision_at_k * recall_at_k) / (precision_at_k + recall_at_k) if (precision_at_k + recall_at_k) > 0 else 0.0
+    return {
+        "top_k_accuracy": top_k_accuracy,
+        "precision_at_k": precision_at_k,
+        "recall_at_k": recall_at_k,
+        "f1_at_k": f1_at_k
+    }
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    acc = accuracy_score(labels, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted')
+    conf_matrix = confusion_matrix(labels, predictions, labels=np.arange(33))
+    class_report = classification_report(labels, predictions, labels=np.arange(33), zero_division=0)
+    top_k_metrics = evaluate_top_k_metrics(logits, labels, k=3)
+    metrics = {
+        "epoch": trainer.state.epoch,
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "confusion_matrix": conf_matrix,
+        "classification_report": class_report,
+        **top_k_metrics
+    }
+    trainer.state.global_metrics = metrics
+    print(f"\nEpoch {trainer.state.epoch}:")
+    print(f"Accuracy: {acc:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1-Score: {f1:.4f}")
+    print(f"\nTop-3 Accuracy: {top_k_metrics['top_k_accuracy']:.4f}")
+    print(f"Top-3 Precision: {top_k_metrics['precision_at_k']:.4f}")
+    print(f"Top-3 Recall: {top_k_metrics['recall_at_k']:.4f}")
+    print(f"F1-Score@3: {top_k_metrics['f1_at_k']:.4f}")
+    print(f"\nClassification Report:\n{class_report}")
+    return {
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "top_k_accuracy": top_k_metrics['top_k_accuracy'],
+        "precision_at_k": top_k_metrics['precision_at_k'],
+        "recall_at_k": top_k_metrics['recall_at_k'],
+        "f1_at_k": top_k_metrics['f1_at_k']
+    }
+
+def plot_top_k_metrics(metrics):
+    top_k_accuracy = metrics["top_k_accuracy"]
+    precision_at_k = metrics["precision_at_k"]
+    recall_at_k = metrics["recall_at_k"]
+    f1_at_k = metrics["f1_at_k"]
+    plt.figure(figsize=(10, 6))
+    metrics_names = ['Top-3 Accuracy', 'Precision@3', 'Recall@3', 'F1-Score@3']
+    metrics_values = [top_k_accuracy, precision_at_k, recall_at_k, f1_at_k]
+
+    plt.bar(metrics_names, metrics_values, color=['blue', 'orange', 'green', 'red'])
+    plt.ylim(0, 1)
+    plt.xlabel('Metrics')
+    plt.ylabel('Values')
+    plt.title('Top-K Metrics')
+    for i, v in enumerate(metrics_values):
+        plt.text(i, v + 0.02, f"{v:.2f}", ha='center', va='bottom')
+    plt.show()
+
+
+regularization_values = [0.01]
+dropout_values = [0.2]
+for regularization in regularization_values:
+    for dropout in dropout_values:
+        # Load model with specified dropout setting
+        model = AutoModelForSequenceClassification.from_pretrained(
+            "KennethEnevoldsen/dfm-sentence-encoder-large",
+            num_labels=33,
+            classifier_dropout=dropout  
+        )
+        training_args = TrainingArguments(
+            output_dir=f"./models/model_reg_{regularization}_dropout_{dropout}",
+            evaluation_strategy="epoch",
+            save_strategy="epoch",  
+            per_device_train_batch_size=8,
+            num_train_epochs=10,
+            weight_decay=regularization,
+            load_best_model_at_end=True,  
+            metric_for_best_model="f1",   
+            logging_dir='./logs',        
+            logging_steps=10,            
+        )
+
+        early_stopping_callback = EarlyStoppingCallback(early_stopping_patience=3)
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=validation_dataset,
+            compute_metrics=compute_metrics,
+            callbacks=[early_stopping_callback]
+        )
+        trainer.train()
+
+        conf_matrix = trainer.state.global_metrics["confusion_matrix"]
+        top_k_conf_matrix = trainer.state.global_metrics.get("top_k_confusion_matrix")
+        class_report = trainer.state.global_metrics["classification_report"]
+        print(f"\nFinal epoch {trainer.state.global_metrics['epoch']} Classification report:")
+        print(class_report)
+
+        plt.figure(figsize=(12, 10))
+        sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=np.arange(33), yticklabels=np.arange(33))
+        plt.title(f'Confusion matrix at final epoch {trainer.state.global_metrics["epoch"]}')
+        plt.xlabel('Predicted labels')
+        plt.ylabel('True labels')
+        plt.show()
+        if top_k_conf_matrix is not None:
+            plt.figure(figsize=(12, 10))
+            sns.heatmap(top_k_conf_matrix, annot=True, fmt='d', cmap='Blues', xticklabels=np.arange(33), yticklabels=np.arange(33))
+            plt.title(f'Top-3 Confusion matrix at final epoch {trainer.state.global_metrics["epoch"]}')
+            plt.xlabel('Predicted labels')
+            plt.ylabel('True labels')
+            plt.show()
+        plot_top_k_metrics(trainer.state.global_metrics)
