@@ -1,0 +1,115 @@
+import nltk
+nltk.download('all')
+from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import pandas as pd
+from google.colab import drive
+import re
+from textblob import TextBlob
+from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+from nltk.corpus import sentiwordnet as swn
+from nltk.stem import WordNetLemmatizer
+import matplotlib.pyplot as plt
+
+##Rule based from: https://www.analyticsvidhya.com/blog/2021/06/rule-based-sentiment-analysis-in-python/
+#example
+analyzer = SentimentIntensityAnalyzer()
+review = "With all this stuff going down at the moment with MJ i've started listening to his music, watching the odd documentary here and there, watched The Wiz and watched Moonwalker again. Maybe i just want to get a certain insight into this guy who i thought was really cool in the eighties just to maybe make up my mind whether he is guilty or innocent."
+scores = analyzer.polarity_scores(review)
+print(scores)
+
+
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = '/content/gdrive/MyDrive/Speciale/full_copy.pkl' #skal rettes alt efter hvor og hvordan koden køres
+eng_df = pd.read_pickle(dataset_path)
+
+#TextBlob sentiment
+def getSubjectivity(review):
+    return TextBlob(review).sentiment.subjectivity
+
+def getPolarity(review):
+    return TextBlob(review).sentiment.polarity
+
+def analysis(score):
+    if score < 0:
+        return 'Negative'
+    elif score == 0:
+        return 'Neutral'
+    else:
+        return 'Positive'
+fin_data = pd.DataFrame(eng_df[['eng', 'Lemma']])
+fin_data['Polarity'] = fin_data['Lemma'].apply(getPolarity)
+fin_data['Analysis'] = fin_data['Polarity'].apply(analysis)
+fin_data.head()
+tb_counts = fin_data.Analysis.value_counts()
+tb_counts
+
+
+
+#VADER
+analyzer = SentimentIntensityAnalyzer()
+
+def vadersentimentanalysis(review):
+    vs = analyzer.polarity_scores(review)
+    return vs['compound']
+fin_data['Vader Sentiment'] = fin_data['Lemma'].apply(vadersentimentanalysis)
+
+def vader_analysis(compound):
+    if compound >= 0.5:
+        return 'Positive'
+    elif compound <= -0.5 :
+        return 'Negative'
+    else:
+        return 'Neutral'
+fin_data['Vader Analysis'] = fin_data['Vader Sentiment'].apply(vader_analysis)
+fin_data.head()
+vader_counts = fin_data['Vader Analysis'].value_counts()
+vader_counts
+
+
+#SentiWordNet
+
+wordnet_lemmatizer = WordNetLemmatizer()
+def sentiwordnetanalysis(pos_data):
+    sentiment = 0
+    tokens_count = 0
+    for word, pos in pos_data:
+        if not pos:
+            continue
+        lemma = wordnet_lemmatizer.lemmatize(word, pos=pos)
+        if not lemma:
+            continue
+        synsets = wordnet.synsets(lemma, pos=pos)
+        if not synsets:
+            continue
+
+        synset = synsets[0]
+        swn_synset = swn.senti_synset(synset.name())
+        sentiment += swn_synset.pos_score() - swn_synset.neg_score()
+        tokens_count += 1
+
+    if tokens_count == 0:
+        return "Neutral"
+    elif sentiment > 0:
+        return "Positive"
+    elif sentiment == 0:
+        return "Neutral"
+    else:
+        return "Negative"
+fin_data['SWN analysis'] = eng_df['POS tagged'].apply(sentiwordnetanalysis)
+fin_data.head()
+
+swn_counts= fin_data['SWN analysis'].value_counts()
+swn_counts
+
+#Plotting
+plt.figure(figsize=(15,7))
+plt.subplot(1,3,1)
+plt.title("TextBlob results")
+plt.pie(tb_counts.values, labels=tb_counts.index, explode=(0, 0, 0.25), autopct='%1.1f%%', shadow=False)
+plt.subplot(1,3,2)
+plt.title("VADER results")
+plt.pie(vader_counts.values, labels=vader_counts.index, explode=(0, 0, 0.25), autopct='%1.1f%%', shadow=False)
+plt.subplot(1,3,3)
+plt.title("SentiWordNet results")
+plt.pie(swn_counts.values, labels=swn_counts.index, explode=(0, 0, 0.25), autopct='%1.1f%%', shadow=False)
+plt.show()
