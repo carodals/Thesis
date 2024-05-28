@@ -1,0 +1,157 @@
+from google.colab import drive
+import torch
+from transformers import MarianMTModel, MarianTokenizer, AutoModelForSequenceClassification, AutoTokenizer
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from transformers import AutoModelForSequenceClassification
+
+drive.mount("/content/gdrive", force_remount=True)
+dataset_path = '/content/gdrive/MyDrive/Speciale/full_copy_msplit.pkl' #"full_copy" er den endelige fil, efer alt data merge er lavet
+df = pd.read_pickle(dataset_path)
+
+#Starting gathering/merging the categories
+df_1 = pd.DataFrame(df)
+mapping = {
+    'Identitet': ['Identitet', 'Usikkerhed', 'Nervøsitet', 'Selvværd'],
+    'Mental fitness': ['Mental fitness', 'Selvomsorg'],
+    'Familie': ['Familie', 'Forældre', 'Skilsmisse'],
+    'Ensomhed': ['Ensomhed'],
+    'Afhængighed og misbrug': ['Afhængighed og misbrug'],
+    'Venner': ['Venner', 'Udenfor'],
+    'Mobning og overgreb': ['Mobning og overgreb', 'Mobning', 'Vold', 'Seksuelle overgreb'],
+    'Kærlighed og sex': ['Kærlighed og sex', 'Dating', 'Forelskelse'],
+    'Trist eller deprimeret': ['Trist eller deprimeret'],
+    'Angst og stress': ['Angst og stress', 'Eksamensstress', 'Eksamensangst', 'Fobi', 'Social angst', 'Tankemylder'],
+    'Spiseforstyrrelser og selvskade': ['Spiseforstyrrelser og selvskade'],
+    'Generelt': ['Generelt'],
+    'Få hjælp': ['Få hjælp'],
+    'Skole og uddannelse': ['Skole og uddannelse'],
+    'Mad, søvn og motion': ['Mad, søvn og motion', 'Søvn'],
+    'Svære følelser og tanker':['Svære følelser og tanker']
+}
+reverse_mapping = {sub: cat for cat, sublist in mapping.items() for sub in sublist}
+df_1['sup_cat'] = df_1['category'].map(reverse_mapping)
+print(df_1)
+
+nan_sup_cat_rows = df_1[df_1['sup_cat'].isna()]
+print("Rows with NaN values in 'sup_cat':\n", nan_sup_cat_rows)
+
+cat_counts = df_1['sup_cat'].value_counts()
+category_labels = {category: i for i, category in enumerate(cat_counts.index)}
+df_1['sup_cat_label'] = df_1['sup_cat'].map(category_labels)
+print(df_1[['ID', 'Category', 'sup_cat', 'sup_cat_label']])
+print("\nCategory Counts:\n", cat_counts)
+
+sup_cat_mapping = {
+    "Kærlighed og sex": 0,
+    "Svære følelser og tanker": 1,
+    "Angst og stress": 2,
+    "Skole og uddannelse": 3,
+    "Trist eller deprimeret": 4,
+    "Venner": 5,
+    "Identitet": 6,
+    "Familie": 7,
+    "Spiseforstyrrelser og selvskade": 8,
+    "Generelt": 9,
+    "Mad, søvn og motion": 10,
+    "Mobning og overgreb": 11,
+    "Ensomhed": 12,
+    "Afhængighed og misbrug": 13,
+    "Få hjælp": 14,
+    "Mental fitness": 15
+}
+
+df_1['sup_cat_label'] = df_1['sup_cat'].map(sup_cat_mapping).astype(int)
+label_counts = df_1['sup_cat'].value_counts()
+print("Label Counts:\n", label_counts)
+
+
+###setting up the model
+# Tokenization
+tokenizer = AutoTokenizer.from_pretrained("KennethEnevoldsen/dfm-sentence-encoder-large")
+def tokenize_function(examples):
+    return tokenizer(examples["question"], padding="max_length", truncation=True)
+tokenized_datasets = dataset.map(tokenize_function, batched=True)
+print(tokenized_datasets)
+print(df_1_unique['labels'])
+
+train_indices, validation_indices = train_test_split(range(len(tokenized_datasets)), test_size=0.05, random_state=42)
+train_dataset = tokenized_datasets.select(train_indices)
+validation_dataset = tokenized_datasets.select(validation_indices
+print("Training dataset size:", len(train_dataset))
+print("Validation dataset size:", len(validation_dataset))
+
+regularization_values = [0.01, 0.05, 0.1]
+dropout_values = [0.1, 0.2, 0.3]
+early_stopping_threshold = 3
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    acc = accuracy_score(labels, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted', zero_division=0)
+    conf_matrix = confusion_matrix(labels, predictions, labels=np.arange(16))
+    class_report = classification_report(labels, predictions, labels=np.arange(16), zero_division=0)
+
+    print(f"\nAccuracy: {acc:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1-Score: {f1:.4f}")
+    print(f"\nClassification Report:\n{class_report}")
+
+    global last_conf_matrix, last_class_report
+    last_conf_matrix = conf_matrix
+    last_class_report = class_report
+    return {
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1
+    }
+
+for regularization in regularization_values:
+    for dropout in dropout_values:
+        run_name = f"reg_{regularization}_dropout_{dropout}"
+        wandb.init(project="all_grouped", name=run_name, config={
+            "regularization": regularization,
+            "dropout": dropout
+        })
+
+        model = AutoModelForSequenceClassification.from_pretrained(
+            "KennethEnevoldsen/dfm-sentence-encoder-large",
+            num_labels=16  
+        )
+
+        training_args = TrainingArguments(
+            output_dir=f"./models/model_{run_name}",
+            evaluation_strategy="epoch",
+            save_strategy="epoch",  
+            per_device_train_batch_size=8,
+            num_train_epochs=10,
+            weight_decay=regularization,
+            load_best_model_at_end=True,  
+            metric_for_best_model="f1",   
+            report_to="wandb",
+            logging_dir='./logs',                    
+            logging_steps=10,                        
+        )
+        early_stopping_callback = EarlyStoppingCallback(early_stopping_patience=3)
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=validation_dataset,
+            compute_metrics=compute_metrics,
+            callbacks=[early_stopping_callback]
+        )
+
+        trainer.train()
+        conf_matrix = last_conf_matrix
+        class_report = last_class_report
+        print(f"\nFinal epoch {trainer.state.epoch} Classification report:")
+        print(class_report)
+
+        sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+        plt.title(f'Confusion matrix at final epoch {trainer.state.epoch}')
+        plt.xlabel('Predicted labels')
+        plt.ylabel('True labels')
+        plt.show()
