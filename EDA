@@ -1,7 +1,15 @@
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+
 drive.mount("/content/gdrive", force_remount=True)
 dataset_path = "/content/gdrive/My Drive/Speciale/full_copy_m_dan_pre.pkl"
 dan_df= pd.read_pickle(dataset_path)
 print(dan_df)
 
-
-dan_df[['Question', 'Final Cleaned Text']]
+#Wordcloud from: https://www.datacamp.com/tutorial/wordcloud-python
+all_text = ' '.join(text for text in dan_df['Final Cleaned Text'])  
+wordcloud = WordCloud(width=800, height=400, background_color='white', max_words = 100).generate(all_text)
+plt.figure(figsize=(10, 5))
+plt.imshow(wordcloud, interpolation='bilinear')
+plt.axis("off")
+plt.show()
