@@ -1,5 +1,13 @@
 import matplotlib.pyplot as plt
 from wordcloud import WordCloud
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
 
 drive.mount("/content/gdrive", force_remount=True)
 dataset_path = "/content/gdrive/My Drive/Speciale/full_copy_m_dan_pre.pkl"
@@ -7,9 +15,64 @@ dan_df= pd.read_pickle(dataset_path)
 print(dan_df)
 
 #Wordcloud from: https://www.datacamp.com/tutorial/wordcloud-python
-all_text = ' '.join(text for text in dan_df['Final Cleaned Text'])  
-wordcloud = WordCloud(width=800, height=400, background_color='white', max_words = 100).generate(all_text)
+text = ' '.join(text for text in dan_df(['cleaned_ans'])  
+wordcloud = WordCloud(width=800, height=400, background_color='white', max_words = 100).generate(text)
 plt.figure(figsize=(10, 5))
 plt.imshow(wordcloud, interpolation='bilinear')
 plt.axis("off")
 plt.show()
+
+
+# Word counting for age and gender - https://github.com/gohjiayi/suicidal-text-detection/blob/main/eda.ipynb
+dan_df['word_count'] = simple_df['question'].str.split().apply(len)
+
+dan_df = simple_df[simple_df['age'].str.isdigit()]
+dan_df['age'] = simple_df['age'].astype(int)
+dan_df['age'] = pd.Categorical(dan_df['age'], categories=sorted(dan_df['age'].unique()), ordered=True)
+
+fig, axes = plt.subplots(2, 1, figsize=(14, 10))
+
+sns.boxplot(x='Gender', y='word_count', data=simple_df, ax=axes[0])
+axes[0].set_title('Word count by gender')
+axes[0].set_ylabel('Word count')
+sns.boxplot(x='Age', y='word_count', data=simple_df, ax=axes[1])
+axes[1].set_title('Word count by age group')
+axes[1].set_ylabel('Word count')
+plt.tight_layout()
+plt.show()
+
+
+#Gender + age distrubition - https://matplotlib.org/stable/gallery/lines_bars_and_markers/bar_stacked.html
+# Turns out there is an empty "below" varble in this,
+age_rem = dan_df[dan_df['age'] != 'below']
+
+age_sex_distribution = age_rem.groupby(['age', 'gender']).size().unstack()
+age_sex_distribution.plot(kind='bar', stacked=True)
+plt.xlabel('Age')
+plt.ylabel('Count')
+plt.title('Distribution of gender across age groups')
+plt.legend(title='Gender')
+plt.show()
+
+#Monthly distribution: https://www.w3schools.com/python/python_datetime.asp and https://plotly.com/python/histograms/
+# 'post_date' is specfic date, so i'll cgange it to datetime and extract month
+dan_df['post_month'] = pd.to_datetime(df['post_date']).dt.month
+df['post_month_name'] = pd.to_datetime(df['post_date']).dt.strftime('%B')
+monthly_counts = dan_df['post_month_name'].value_counts().sort_index().reset_index()
+monthly_counts.columns = ['Month', 'Cuestion count']
+month_order = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+]
+monthly_counts['month'] = pd.Categorical(monthly_counts['month'], categories=month_order, ordered=True)
+
+plt.figure(figsize=(12, 6))
+sns.barplot(x='Month', y='Question count', data=monthly_counts)
+plt.title("Frequency of inquiries per month for all years")
+plt.tight_layout()
+plt.show()
+
+
+
+
+
