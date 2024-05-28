@@ -2,15 +2,19 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from collections import Counter
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from collections import Counter, defaultdict
+import six  # Importer six for at håndtere dictionary iterationer i render_mpl_table, hvis nødvendigt
+import random
 
 #See "Data preprecosseing" to see the development of tokenz
 drive.mount("/content/gdrive", force_remount=True)
 dataset_path = '/content/gdrive/MyDrive/Speciale/answer_pre.pkl' #"full_copy" er den endelige fil, efer alt data merge er lavet
 df = pd.read_pickle(dataset_path)
 
-
 #Displaying N-grams for Mindhelper answers - source: https://github.com/gohjiayi/suicidal-text-detection/blob/main/eda.ipynb
-
 def generate_ngrams(tokens, n):
     ngrams = zip(*[tokens[i:] for i in range(n)])
     return [" ".join(ngram) for ngram in ngrams]
@@ -64,8 +68,66 @@ fig4 = render_mpl_table(quadgram_df, header_columns=0, col_width=3)
 plt.show()
 
 
+#Generating bigram sentences - https://towardsdatascience.com/text-generation-using-n-gram-model-8d12d9802aa0:
+bigram_model = defaultdict(lambda: defaultdict(lambda: 0))
+for bigram in bigram:
+    w1, w2 = bigram.split()
+    bigram_model[w1][w2] += 1
+
+for w1 in bigram_model:
+    total_count = float(sum(bigram_model[w1].values()))
+    for w2 in bigram_model[w1]:
+        bigram_model[w1][w2] /= total_count
+
+def generate_sentence(bigram_model, seed_word, length=10):
+    current_word = seed_word
+    sentence = [current_word]
+    for _ in range(length - 1):
+        if current_word in bigram_model:
+            next_word = random.choices(list(bigram_model[current_word].keys()),
+                                       list(bigram_model[current_word].values()))[0]
+            sentence.append(next_word)
+            current_word = next_word
+        else:
+            break
+    return ' '.join(sentence)
+
+print(generate_sentence(bigram_model, 'selvmord', 20))
+print(generate_sentence(bigram_model, 'angst', 20))
+print(generate_sentence(bigram_model, 'skole', 20))
+print(generate_sentence(bigram_model, 'forældre', 20))
+print(generate_sentence(bigram_model, 'snakke', 20))
 
 
+#Generating trigram sentences - https://towardsdatascience.com/text-generation-using-n-gram-model-8d12d9802aa0:
+trigram_model = defaultdict(lambda: defaultdict(lambda: 0))
+for trigram in trigram:
+    w1, w2, w3 = trigram.split()
+    trigram_model[(w1, w2)][w3] += 1
+
+for w1_w2 in trigram_model:
+    total_count = float(sum(trigram_model[w1_w2].values()))
+    for w3 in trigram_model[w1_w2]:
+        trigram_model[w1_w2][w3] /= total_count
+
+def generate_sentence_trigram(trigram_model, seed_words, length=10):
+    current_words = seed_words.split()
+    if len(current_words) != 2:
+        raise ValueError("Seed words must be a bigram")
+    sentence = current_words
+    for _ in range(length - 2):
+        if tuple(current_words) in trigram_model:
+            next_word = random.choices(list(trigram_model[tuple(current_words)].keys()),
+                                       list(trigram_model[tuple(current_words)].values()))[0]
+            sentence.append(next_word)
+            current_words = sentence[-2:]
+        else:
+            break
+    return ' '.join(sentence)
+#Important to remeber that trigrams takes bigrams as input
+print(generate_sentence_trigram(trigram_model, 'skrive herind', 20))
+print(generate_sentence_trigram(trigram_model, 'din forældre', 20))
+print(generate_sentence_trigram(trigram_model, 'kunne rigtig', 20))
 
 
 
@@ -75,7 +137,7 @@ dataset_path = "/content/gdrive/My Drive/Speciale/full_copy_m_dan_pre.pkl"
 dan_df= pd.read_pickle(dataset_path)
 print(dan_df)
 
-#Displaying N-grams for Mindhelper answers - source: https://github.com/gohjiayi/suicidal-text-detection/blob/main/eda.ipynb
+#Displaying N-grams advice column messages - source: https://github.com/gohjiayi/suicidal-text-detection/blob/main/eda.ipynb
 drive.mount("/content/gdrive", force_remount=True)
 dataset_path = "/content/gdrive/My Drive/Speciale/full_copy_m_dan_pre.pkl"
 dan_df= pd.read_pickle(dataset_path)
@@ -131,4 +193,6 @@ fig2 = render_mpl_table(bigram_df, header_columns=0, col_width=3)
 fig3 = render_mpl_table(trigram_df, header_columns=0, col_width=3)
 fig4 = render_mpl_table(quadgram_df, header_columns=0, col_width=3)
 plt.show()
+
+
 
