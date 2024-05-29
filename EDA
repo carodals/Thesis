@@ -73,6 +73,37 @@ plt.tight_layout()
 plt.show()
 
 
+##Boxplot for Mindhelper answer, source: https://plotly.com/python/box-plots/
+nan_answers = dan_df['answer'].isna().sum()
+print(f"Number of NaN answers: {nan_answers}")
+empty_answers = dan_df[dan_df['answer'].apply(len) == 0].shape[0]
+print(f"Number of answers with length 0: {empty_answers}")
+
+
+dan_df_cleaned = dan_df.dropna(subset=['answer'])
+dan_df_cleaned = dan_df_cleaned[dan_df_cleaned['answer'].apply(len) > 0]
+dan_df_cleaned['answer_length'] = dan_df_cleaned['answer'].apply(len)
+
+length_stats = dan_df_cleaned['answer_length'].describe()
+print("Statistics of answer lengths after cleaning:")
+print(length_stats)
+
+min_length = length_stats['min']
+max_length = length_stats['max']
+mean_length = length_stats['mean']
+
+plt.figure(figsize=(12, 6))
+sns.boxplot(x=dan_df_cleaned['answer_length'])
+plt.title("Boxplot of Mindhelper answer lengths")
+plt.xlabel("Length of answers")
+
+info_text = f"Min: {min_length}\nMax: {max_length}\nMean: {mean_length:.2f}"
+props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+plt.gca().text(0.95, 0.95, info_text, transform=plt.gca().transAxes, fontsize=12,
+               verticalalignment='top', horizontalalignment='right', bbox=props)
+
+plt.tight_layout()
+plt.show()
 
 
 
