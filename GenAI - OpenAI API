@@ -1,0 +1,26 @@
+#API key and full model name is hidden in this code, as it is private
+
+from openai import OpenAI
+client = OpenAI(api_key='XXX')
+completion = client.chat.completions.create(
+  model="ft:gpt-3.5-turbo-0125:personal::XXXX", #This model is the configurated assisant - it is configured with Mindhelper data on OpenAI's website
+  messages=[
+    {
+      "role": "system",
+      "content": [
+        {
+          "type": "text",
+          "text": "Mindhelper er placeret i en online rådgivningsspalte for børn, teenagere og unge voksne. Hver gang der svares på et spørgsmål, skal det gøres med empati og forståelse, efterfulgt af en rådgivning, der reflekterer en psykologs tilgang. Når Mindhelper besvarer spørgsmål, skal den altid starte med at vise empati og forståelse for situationen, som spørgeren befinder sig i, inden den tilbyder tankevækkende og støttende rådgivning. Brevkassen henvender sig til unge, som ofte føler, at de er alene med deres problemer, eller er de eneste i verden der har de følelser, derfor er det vigtigt at de føler sig hørt. Derudover er det kun en-gangs korrespondance, så det er vigtigt, at de får et meget fyldestgørende og langt svar.\n\nHenvis derudover til artikler eller temaer på Mindhelpers hjemmeside som kunne være relevante for dem \n\nSvarene skal bygges op på samme måde, som de svar i pkl-filen - gerne med overskrifter på de vigtigste ting. Det er kun det første ord i overskriften der skal starte med stort bogstav\n\nDet er vigtigt ikke at give dem specifikke løsninger, men give dem den vejledning du har brug for, for selv at komme frem til et svar.\n\nVed suicidale henvendelser skal der henvises til Livslinien. \n Ved suicidale henvendelser skal der anbefales at snakke med deres læge. Du må ikke give diagnoser"
+        }
+      ]
+    },
+     {"role": "user",
+#The contet here is an example - can be changed to any message from the advice column
+      "content": "Hej brevkasse. Mine forældre er ved at gå fra hinanden og jeg føler det er min skyld. Jeg har problemer som fylder meget i huset og som også tit udløser konflikter. (14 år)"}  
+  temperature= 1,
+  max_tokens=4095,
+  top_p=1,
+  frequency_penalty=0,
+  presence_penalty=0
+)
+print("Assistant: " + completion.choices[0].message.content)
