@@ -1,0 +1,428 @@
+import os
+import torch
+from torch.utils.data import DataLoader, TensorDataset
+from torch import nn, optim
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics import confusion_matrix, classification_report, accuracy_score, precision_recall_fscore_support
+import matplotlib.pyplot as plt
+import seaborn as sns
+import numpy as np
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+import wandb
+wandb.login()
+
+drive.mount("/content/gdrive", force_remount=True)
+df = pd.read_pickle('/content/gdrive/MyDrive/Speciale/full_copy_su.pkl')
+df = df[['ID', 'post_date','sex', 'age','category','question', 'label']]
+
+# Simplificerer df så der ikke er så meget data der skal håndteres og dropper den missing value og sætter æabel til heltal
+df = df[['ID', 'sex', 'age','category','question', 'label']]
+df.dropna(subset=['label'], inplace=True)
+df['label'] = df['label'].astype(int)
+print(df)
+
+# Vigtigt at df bliver lavet om til Hugginface datasæt, da det ellers ikke kan benyttes i map funktionen
+dataset = Dataset.from_pandas(df)
+
+#Experiment with first model, KennethEnevoldsen/dfm-sentence-encoder-large:https://huggingface.co/KennethEnevoldsen/dfm-sentence-encoder-large,  https://huggingface.co/docs/transformers/training?, https://huggingface.co/docs/transformers/v4.41.2/en/main_classes/trainer#transformers.Trainer and https://huggingface.co/docs/transformers/v4.41.2/en/main_classes/trainer#transformers.TrainingArguments
+model = AutoModelForSequenceClassification.from_pretrained("KennethEnevoldsen/dfm-sentence-encoder-large", num_labels=2)
+print("Model konfiguration:", model.config)
+tokenizer = AutoTokenizer.from_pretrained("KennethEnevoldsen/dfm-sentence-encoder-large")
+def tokenize_function(examples):
+    return tokenizer(examples["question"], padding="max_length", truncation=True, max_length=512)
+tokenized_datasets = dataset.map(tokenize_function, batched=True)
+print(tokenized_datasets)
+
+
+train_test_split = tokenized_datasets.train_test_split(test_size=0.1)
+train_test_dataset = DatasetDict({
+    'train': train_test_split['train'],
+    'test': train_test_split['test']
+})
+print(train_test_dataset)
+train = train_test_dataset['train']
+test = train_test_dataset['test']
+
+
+####Runnig default without hyperparameters
+y_train = np.array(train['label']) 
+training_args = TrainingArguments(
+    output_dir='/content/gdrive/MyDrive/Speciale/sui_op', 
+    per_device_train_batch_size=8,  
+    per_device_eval_batch_size=16,  
+    logging_dir='./logs', 
+    logging_steps=10, 
+    eval_strategy='epoch', 
+    save_strategy='epoch',
+    load_best_model_at_end=True, 
+    metric_for_best_model='eval_loss',  
+    greater_is_better=False,  
+)
+
+def compute_metrics(p):
+    logits, labels = p
+    predictions = np.argmax(logits, axis=-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted')
+    acc = accuracy_score(labels, predictions)
+    return {
+        'accuracy': acc,
+        'f1': f1,
+        'precision': precision,
+        'recall': recall
+    }
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train,
+    eval_dataset=test,
+    compute_metrics=compute_metrics,
+)
+
+trainer.train()
+
+predictions_output = trainer.predict(test)
+logits, labels = predictions_output.predictions, predictions_output.label_ids
+predictions = np.argmax(logits, axis=-1)
+conf_matrix = confusion_matrix(labels, predictions)
+class_report = classification_report(labels, predictions)
+print(f"\nBest Model Classification Report:")
+print(class_report)
+
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+plt.title('Confusion Matrix of the Best Model')
+plt.xlabel('Predicted Labels')
+plt.ylabel('True Labels')
+plt.show()
+
+
+## Running for 10 epochs and earlystopping
+y_train = np.array(train['label']) 
+training_args = TrainingArguments(
+    output_dir='/content/gdrive/MyDrive/Speciale/sui_op', 
+    per_device_train_batch_size=8,  
+    per_device_eval_batch_size=16,  
+    logging_dir='./logs', 
+    num_train_epochs=10,
+    logging_steps=10, 
+    eval_strategy='epoch', 
+    save_strategy='epoch',
+    load_best_model_at_end=True, 
+    metric_for_best_model='eval_loss',  
+    greater_is_better=False,  
+)
+
+def compute_metrics(p):
+    logits, labels = p
+    predictions = np.argmax(logits, axis=-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted')
+    acc = accuracy_score(labels, predictions)
+    return {
+        'accuracy': acc,
+        'f1': f1,
+        'precision': precision,
+        'recall': recall
+    }
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train,
+    eval_dataset=test,
+    compute_metrics=compute_metrics,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]
+)
+
+trainer.train()
+
+predictions_output = trainer.predict(test)
+logits, labels = predictions_output.predictions, predictions_output.label_ids
+predictions = np.argmax(logits, axis=-1)
+conf_matrix = confusion_matrix(labels, predictions)
+class_report = classification_report(labels, predictions)
+print(f"\nBest Model Classification Report:")
+print(class_report)
+
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+plt.title('Confusion Matrix of the Best Model')
+plt.xlabel('Predicted Labels')
+plt.ylabel('True Labels')
+plt.show()
+
+
+###Trying Maltehb/danish-bert-botxo instead, source: https://huggingface.co/Maltehb/danish-bert-botxo, https://huggingface.co/docs/transformers/training?, https://huggingface.co/docs/transformers/v4.41.2/en/main_classes/trainer#transformers.Trainer and https://huggingface.co/docs/transformers/v4.41.2/en/main_classes/trainer#transformers.TrainingArguments
+
+print("Unique labels before change:", df['label'].unique())
+df['label'] = df['label'].apply(lambda x: 0 if x not in [0, 1] else x)
+print("Unique labels after change:", df['label'].unique())
+# Simplificerer df så der ikke er så meget data der skal håndteres og dropper den missing value og sætter æabel til heltal
+df = df[['ID', 'sex', 'age','category','question', 'label']]
+df.dropna(subset=['label'], inplace=True)
+df['label'] = df['label'].astype(int)
+print(df)
+
+# Vigtigt at df bliver lavet om til Hugginface datasæt, da det ellers ikke kan benyttes i map funktionen
+dataset = Dataset.from_pandas(df)
+
+model = AutoModelForSequenceClassification.from_pretrained("Maltehb/danish-bert-botxo", num_labels=2)
+print("Model konfiguration:", model.config)
+
+tokenizer = AutoTokenizer.from_pretrained("Maltehb/danish-bert-botxo")
+def tokenize_function(examples):
+    return tokenizer(examples["question"], padding="max_length", truncation=True, max_length=512)
+tokenized_datasets = dataset.map(tokenize_function, batched=True)
+print(tokenized_datasets)
+
+
+train_test_split = tokenized_datasets.train_test_split(test_size=0.1)
+train_test_dataset = DatasetDict({
+    'train': train_test_split['train'],
+    'test': train_test_split['test']
+})
+print(train_test_dataset)
+train = train_test_dataset['train']
+test = train_test_dataset['test'
+
+filtered_test = test.filter(lambda example: example['label'] == 1)
+print(filtered_test)
+
+
+#First model:
+
+metric = evaluate.load("accuracy")
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    acc = accuracy_score(labels, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted')
+    conf_matrix = confusion_matrix(labels, predictions)
+    class_report = classification_report(labels, predictions)
+
+    metrics = {
+        "epoch": trainer.state.epoch,
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "confusion_matrix": conf_matrix,
+        "classification_report": class_report
+    }
+    trainer.state.global_metrics = metrics
+
+    print(f"\nEpoch {trainer.state.epoch}:")
+    print(f"Accuracy: {acc:.4f}")
+    print(f"Precision: {precision:.4f}")
+    print(f"Recall: {recall:.4f}")
+    print(f"F1-Score: {f1:.4f}")
+    return {
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1
+    }
+
+
+training_args = TrainingArguments(
+    output_dir='./results',                  
+    num_train_epochs=10,                    
+    per_device_train_batch_size=8,           
+    per_device_eval_batch_size=16,          
+    logging_dir='./logs',                    
+    logging_steps=10,                       
+    evaluation_strategy='epoch',            
+    save_strategy='epoch',                  
+    load_best_model_at_end=True,            
+    metric_for_best_model='eval_loss',       
+    greater_is_better=False,               
+)
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train,
+    eval_dataset=test,
+    compute_metrics=compute_metrics,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]
+)
+trainer.train()
+
+
+predictions_output = trainer.predict(test)
+logits, labels = predictions_output.predictions, predictions_output.label_ids
+predictions = np.argmax(logits, axis=-1)
+conf_matrix = confusion_matrix(labels, predictions)
+class_report = classification_report(labels, predictions)
+print(f"\nBest Model Classification Report:")
+print(class_report)
+
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+plt.title('Confusion matrix of the best model')
+plt.xlabel('Predicted labels')
+plt.ylabel('True labels')
+plt.show()
+
+
+###Huge gridsearch
+metric = evaluate.load("accuracy")
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    predictions = np.argmax(logits, axis=-1)
+    acc = accuracy_score(labels, predictions)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted')
+    conf_matrix = confusion_matrix(labels, predictions).tolist()  # Convert to list for serialization
+    class_report = classification_report(labels, predictions, output_dict=True)
+
+
+    wandb.log({
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "confusion_matrix": wandb.plot.confusion_matrix(probs=None, y_true=labels, preds=predictions, class_names=list(set(labels)))
+    })
+    return {
+        "accuracy": acc,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "confusion_matrix": conf_matrix,
+        #"classification_report": class_report
+    }
+
+param_grid = {
+    'learning_rate': [5e-5, 3e-5, 2e-5],
+    'per_device_train_batch_size': [8, 16, 24],
+    'weight_decay': [0.0, 0.01, 0.1],
+    'dropout': [0.1, 0.3, 0.5]
+}
+
+
+
+def train_with_hyperparams(params):
+    config.hidden_dropout_prob = params['dropout']
+    config.attention_probs_dropout_prob = params['dropout']
+    model = AutoModelForSequenceClassification.from_pretrained("Maltehb/danish-bert-botxo", config=config)
+
+    training_args = TrainingArguments(
+        output_dir='./results',
+        learning_rate=params['learning_rate'],
+        per_device_train_batch_size=params['per_device_train_batch_size'],
+        per_device_eval_batch_size=16,
+        num_train_epochs=13, 
+        weight_decay=params['weight_decay'],
+        logging_dir='./logs',
+        logging_steps=10,
+        evaluation_strategy='epoch',
+        save_strategy='epoch',  
+        report_to="wandb",
+        load_best_model_at_end=True,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        train_dataset=train,
+        eval_dataset=test,
+        compute_metrics=compute_metrics,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]  # Add early stopping
+    )
+    trainer.train()
+    eval_metrics = trainer.evaluate()
+    return eval_metrics, trainer
+
+best_score = 0
+best_params = None
+best_metrics = None
+
+for params in ParameterGrid(param_grid):
+    run_name = f"lr_{params['learning_rate']}_bs_{params['per_device_train_batch_size']}_wd_{params['weight_decay']}_do_{params['dropout']}"
+    print(f"Training with params: {params} (run name: {run_name})")
+    for attempt in range(3):  # Try up to 3 times
+        try:
+            run = wandb.init(project="sui_hypgrid", config=params, name=run_name, reinit=True)
+            break
+        except wandb.errors.CommError as e:
+            print(f"Run initialization failed: {e}. Retrying in 10 seconds...")
+            time.sleep(10)
+    else:
+        print("Failed to initialize W&B run after 3 attempts. Skipping this configuration.")
+        continue
+    metrics, trainer = train_with_hyperparams(params)
+    print(f"Metrics: {metrics}")
+    if metrics['eval_accuracy'] > best_score:
+        best_score = metrics['eval_accuracy']
+        best_params = params
+        best_metrics = metrics
+    run.finish()
+
+conf_matrix = best_metrics["confusion_matrix"]
+class_report = best_metrics["classification_report"]
+print(f"\nBest Classification Report:")
+print(class_report)
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+plt.title('Confusion Matrix for Best Model')
+plt.xlabel('Predicted Labels')
+plt.ylabel('True Labels')
+plt.show()
+
+
+####Class weight:
+y_train = np.array(train['label'])  # Modify this line as needed based on how you load your data
+class_weights = compute_class_weight('balanced', classes=np.unique(y_train), y=y_train)
+class_weights_dict = {i: class_weights[i] for i in range(len(class_weights))}
+
+training_args = TrainingArguments(
+    output_dir='/content/gdrive/MyDrive/Speciale/sui_op',  
+    num_train_epochs=10,  # number of training epochs
+    per_device_train_batch_size=8, 
+    per_device_eval_batch_size=16,  
+    logging_dir='./logs',  
+    logging_steps=10, 
+    eval_strategy='epoch', 
+    save_strategy='epoch', 
+    load_best_model_at_end=True,  
+    metric_for_best_model='eval_loss',  
+    greater_is_better=False,
+)
+
+def compute_metrics(p):
+    logits, labels = p
+    predictions = np.argmax(logits, axis=-1)
+    precision, recall, f1, _ = precision_recall_fscore_support(labels, predictions, average='weighted')
+    acc = accuracy_score(labels, predictions)
+    return {
+        'accuracy': acc,
+        'f1': f1,
+        'precision': precision,
+        'recall': recall
+    }
+
+trainer = Trainer(
+    model=model,
+    args=training_args,
+    train_dataset=train,
+    eval_dataset=test,
+    compute_metrics=compute_metrics,
+    callbacks=[EarlyStoppingCallback(early_stopping_patience=3)]
+)
+trainer.train()
+
+predictions_output = trainer.predict(test)
+logits, labels = predictions_output.predictions, predictions_output.label_ids
+predictions = np.argmax(logits, axis=-1)
+conf_matrix = confusion_matrix(labels, predictions)
+class_report = classification_report(labels, predictions)
+print(f"\nBest Model Classification Report:")
+print(class_report)
+
+sns.heatmap(conf_matrix, annot=True, fmt='d', cmap='Blues')
+plt.title('Confusion matrix of the best model')
+plt.xlabel('Predicted labels')
+plt.ylabel('True labels')
+plt.show()
+
+
+
