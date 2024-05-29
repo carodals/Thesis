@@ -1,0 +1,118 @@
+# Suicidal klassification - https://huggingface.co/sentinet/suicidality
+#This code can seem a bit confusing as there are sudden merges etc - this is to show how the comparison between the manually labeled data and the model's data is made - this required a merging of a CVS file where the manually labeled data was in
+
+#For Danish text: 
+classification_model_name = "sentinet/suicidality"
+classification_tokenizer = AutoTokenizer.from_pretrained(classification_model_name)
+classification_model = AutoModelForSequenceClassification.from_pretrained(classification_model_name)
+
+def classify_text(english_text):
+    inputs = classification_tokenizer(english_text, return_tensors="pt", padding=True, truncation=True, max_length=512)
+    with torch.no_grad():
+        outputs = classification_model(**inputs)
+    prediction = torch.argmax(outputs.logits, dim=1).item()
+    return prediction
+df['classification'] = df['question'].apply(classify_text)
+print(df.head())
+
+# undersøger antal rækker med classification = 1
+count_class = df[df['classification'] == 1].shape[0]
+print("Antal rækker med classification = 1:", count_class)
+
+#Gemmer klassification i en pickle fil (skal køres igen når jeg er klar - husk att ændre fil navn på pickle)
+input_pickle_path = '/content/gdrive/MyDrive/Speciale/class_dataframe.pkl'
+df_from_pickle = pd.read_pickle(input_pickle_path)
+output_csv_path = '/content/gdrive/MyDrive/Speciale/class_dataframe.csv'
+df_from_pickle.to_csv(output_csv_path, index=False, escapechar='\\')
+print("DataFrame fra pickle-fil er gemt som CSV-fil.")
+
+#For English text: 
+classification_model_name = "sentinet/suicidality"
+classification_tokenizer = AutoTokenizer.from_pretrained(classification_model_name)
+classification_model = AutoModelForSequenceClassification.from_pretrained(classification_model_name)
+
+def classify_text(english_text):
+    inputs = classification_tokenizer(english_text, return_tensors="pt", padding=True, truncation=True, max_length=512)
+    with torch.no_grad():
+        outputs = classification_model(**inputs)
+    prediction = torch.argmax(outputs.logits, dim=1).item()
+    return prediction
+df['classification_pt2'] = df['eng'].apply(classify_text)
+print(df.head())
+
+# undersøger antal rækker med classification = 1
+count_classification_1 = df[df['classification_pt2'] == 1].shape[0]
+print("Antal rækker med classification = 1:", count_classification_1)
+
+#Gemmer klassification i en pickle fil (skal køres igen når jeg er klar - husk att ændre fil navn på pickle)
+input_pickle_path = '/content/gdrive/MyDrive/Speciale/class_dataframe.pkl'
+df_from_pickle = pd.read_pickle(input_pickle_path)
+output_csv_path = '/content/gdrive/MyDrive/Speciale/class_dataframe2.csv'
+df_from_pickle.to_csv(output_csv_path, index=False, escapechar='\\')
+print("DataFrame fra pickle-fil er gemt som CSV-fil.")
+
+
+#Merging after manual labeling
+full = pd.read_pickle("/content/gdrive/My Drive/Speciale/newtranslated_data.pkl")
+full_copy = full.copy()
+last_rows_full = full_copy.tail(357)
+last_rows_translated = translated_df.tail(357)
+last_rows_full['eng'] = last_rows_translated['eng'].values
+
+# Opdater "full" dataframe med de opdaterede rækker
+full_copy.update(last_rows_full)
+class_df = pd.read_excel("/content/gdrive/My Drive/Speciale/class_dataframe2.xlsx")
+full_copy["classification"] = class_df["classification"]
+full_copy["m_class"] = class_df["m_class"]
+full_copy["kval_class"] = class_df["kval_class"]
+#Tjekker om alle koloner og rækker er der
+full_copy.head()
+
+
+#Putting it all together. This code is done after the manual labeling is done - the manual labeling is done in the CVS file that previous code was stored in, which is why there is no code for it.
+
+count_classification_1_in_m_class = df[(df['classification_pt2'] == 1) & (df['m_class'] == 1)].shape[0]
+
+print("Antal rækker med classification_pt2 = 1 og m_class = 1:", count_classification_1_in_m_class)
+#Tjekker at alt er korret
+num_rows = len(full_copy)
+num_columns = len(full_copy.columns)
+print("Antal rækker i translated_df:", num_rows)
+print("Antal kolonner i translated_df:", num_columns)
+missing_eng_values = full_copy[full_copy['eng'].isnull()]
+
+if missing_eng_values.empty:
+    print("Ingen tomme 'eng' værdier i full_copy.")
+else:
+    print("Der er tomme 'eng' værdier i full_copy:")
+    print(missing_eng_values)
+
+print(full_copy.tail())
+#Tjekker det er gjort korrekt, ved at undersøge manuel labeling = 1
+m_class_ones = full_copy[full_copy['m_class'] == 1]
+print("Rækker med værdi 1 i 'm_class':")
+print(m_class_ones)
+
+
+output_path = "/content/gdrive/My Drive/Speciale/full_copy.pkl"
+output_directory = os.path.dirname(output_path)
+if not os.path.exists(output_directory):
+    os.makedirs(output_directory)
+full_copy.to_pickle(output_path)
+print("Dataframe 'full_copy' blev gemt som en pickle fil på:", output_path)
+
+#Pie chart for English:
+import matplotlib.pyplot as plt
+import numpy as np
+y = np.array([30.99, 69.1])#precent calucalated from the actual numbers
+mylabels = ["Labeled as suicidal", "Labeled as non-siucidal"]
+myexplode = [0.09, 0]
+plt.pie(y, labels = mylabels, explode = myexplode, autopct='%1.1f%%', shadow = True)
+plt.show()
+
+#Pie chart for Danish:
+y = np.array([2, 98])
+mylabels = ["Labeled as suicidal", "Labeled as non-siucidal"]
+myexplode = [0.05, 0]
+plt.pie(y, labels = mylabels, explode = myexplode, autopct='%1.1f%%', shadow = True)
+plt.show()
